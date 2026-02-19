@@ -5,3 +5,8 @@ venv/
 env/
 .env
 .DS_Store
+
+# Coverage
+.coverage
+coverage.xml
+htmlcov/

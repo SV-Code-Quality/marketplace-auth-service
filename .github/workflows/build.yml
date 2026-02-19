@@ -4,7 +4,7 @@ on:
       - main
       - master
       - develop
-      - 'releases/**'
+      - "releases/**"
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -13,25 +13,37 @@ jobs:
   sonarqube:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    - name: Create custom truststore
-      run: |
-        # Extract host and port from SONAR_HOST_URL
-        SONAR_URL="${{ vars.SONAR_HOST_URL }}"
-        SONAR_HOST_PORT=$(echo $SONAR_URL | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-        if [[ $SONAR_HOST_PORT != *":"* ]]; then
-          SONAR_HOST_PORT="$SONAR_HOST_PORT:443"
-        fi
-        echo "Fetching certificate from $SONAR_HOST_PORT"
-        echo | openssl s_client -showcerts -connect $SONAR_HOST_PORT 2>/dev/null | openssl x509 -outform pem > sonar.pem
-        keytool -import -alias sonarqube -file sonar.pem -keystore truststore.jks -storepass changeit -noprompt
-    - name: SonarQube Scan
-      uses: SonarSource/sonarqube-scan-action@v7.0.0
-      env:
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
-        SONAR_SCANNER_OPTS: >
-          -Djavax.net.ssl.trustStore=${{ github.workspace }}/truststore.jks
-          -Djavax.net.ssl.trustStorePassword=changeit
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml:coverage.xml
+      - name: Create custom truststore
+        run: |
+          # Extract host and port from SONAR_HOST_URL
+          SONAR_URL="${{ vars.SONAR_HOST_URL }}"
+          SONAR_HOST_PORT=$(echo $SONAR_URL | sed -e 's|^[^/]*//||' -e 's|/.*$||')
+          if [[ $SONAR_HOST_PORT != *":"* ]]; then
+            SONAR_HOST_PORT="$SONAR_HOST_PORT:443"
+          fi
+          echo "Fetching certificate from $SONAR_HOST_PORT"
+          echo | openssl s_client -showcerts -connect $SONAR_HOST_PORT 2>/dev/null | openssl x509 -outform pem > sonar.pem
+          keytool -import -alias sonarqube -file sonar.pem -keystore truststore.jks -storepass changeit -noprompt
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v7.0.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_SCANNER_OPTS: >
+            -Djavax.net.ssl.trustStore=${{ github.workspace }}/truststore.jks
+            -Djavax.net.ssl.trustStorePassword=changeit
